@@ -1,10 +1,10 @@
 """
-train_lightgbm_pipeline.py
+trainer.py
 
 Usage:
-  - Edit TARGET_COLUMN below to match the column name in your Excel sheet that is the label.
-  - Then run: python train_lightgbm_pipeline.py
-Outputs will be written to /mnt/data/ (or current working dir) by default.
+  - Update DATA_PATH and TARGET_COLUMN below to match your dataset.
+  - Then run: python trainer.py
+Outputs will be written to OUTPUT_DIR (created if missing).
 """
 
 import pandas as pd
@@ -21,9 +21,8 @@ import joblib
 import matplotlib.pyplot as plt
 
 # ********** USER SETTINGS **********
-EXCEL_PATH = "./data.xlsx"
-SHEET_NAME = None  # None -> first sheet
-TARGET_COLUMN = "Unnamed: 12"  # <-- change this to the actual label column in your sheet
+DATA_PATH = "./data.csv"
+TARGET_COLUMN = "Risk"  # <-- change this to the actual label column in your sheet
 RANDOM_STATE = 42
 TEST_SIZE = 0.30
 N_ITER_SEARCH = 20
@@ -33,11 +32,19 @@ OUTPUT_DIR = "./model_outputs"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# read sheet
-xls = pd.ExcelFile(EXCEL_PATH)
-sheet = SHEET_NAME if SHEET_NAME else xls.sheet_names[0]
-df = xls.parse(sheet)
-# normalize column names to strings
+# read tabular data
+if not os.path.exists(DATA_PATH):
+    raise FileNotFoundError(f"DATA_PATH '{DATA_PATH}' does not exist.")
+
+read_kwargs = {}
+if DATA_PATH.lower().endswith((".xlsx", ".xls")):
+    # maintain compatibility with legacy Excel files
+    sheet_name = None  # default to first sheet
+    df = pd.read_excel(DATA_PATH, sheet_name=sheet_name, **read_kwargs)
+else:
+    df = pd.read_csv(DATA_PATH, **read_kwargs)
+
+# normalize column names to strings (strip spaces)
 df.columns = [str(c).strip() for c in df.columns]
 
 # quick inspect
@@ -55,9 +62,17 @@ y = df[TARGET_COLUMN].copy()
 # basic cleanup for y
 if y.dtype == object:
     y = y.astype(str).str.strip()
+    y = y.replace({"N": "NO", "": np.nan})
 # if numeric but integer-like, convert to int
 if pd.api.types.is_float_dtype(y) and y.dropna().apply(float.is_integer).all():
     y = y.astype('Int64')
+
+# drop rows with missing targets
+if y.isna().any():
+    missing_idx = y[y.isna()].index
+    print(f"Dropping {len(missing_idx)} rows with missing target.")
+    X = X.drop(index=missing_idx)
+    y = y.drop(index=missing_idx)
 
 print("Target value counts:\n", y.value_counts(dropna=False))
 
@@ -83,7 +98,13 @@ X_pre = preproc.fit_transform(X)
 feature_names = num_cols + cat_cols
 
 # train-test split (stratify when label is categorical with few classes)
-stratify_arg = y if y.nunique() <= 10 else None
+value_counts = y.value_counts()
+if y.nunique() <= 10 and value_counts.min() >= 2:
+    stratify_arg = y
+else:
+    stratify_arg = None
+    if y.nunique() <= 10 and value_counts.min() < 2:
+        print("Skipping stratified split because minimum class count < 2.")
 X_train, X_test, y_train, y_test = train_test_split(X_pre, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=stratify_arg)
 
 # Baseline: Logistic Regression (for clinical interpretability)
@@ -93,12 +114,18 @@ y_pred_lr = lr.predict(X_test)
 print("Logistic Regression report:\n", classification_report(y_test, y_pred_lr))
 
 # LightGBM training and tuning
+LGB = True
+lgb_import_error = None
 try:
     import lightgbm as lgb
-    LGB = True
-except Exception:
+except ModuleNotFoundError as exc:
     LGB = False
-    from sklearn.ensemble import HistGradientBoostingClassifier
+    lgb_import_error = f"{exc.__class__.__name__}: {exc}"
+except Exception as exc:  # surface unexpected import issues
+    raise RuntimeError("LightGBM is installed but failed to import.") from exc
+finally:
+    if not LGB:
+        from sklearn.ensemble import HistGradientBoostingClassifier
 
 if LGB:
     model = lgb.LGBMClassifier(random_state=RANDOM_STATE, n_jobs=4)
@@ -153,7 +180,8 @@ if LGB:
     fi_df.to_csv(os.path.join(OUTPUT_DIR, "feature_importances.csv"), index=False)
     print("Feature importances saved to", os.path.join(OUTPUT_DIR, "feature_importances.csv"))
 else:
-    print("LightGBM not installed. Skipped hyperparameter tuning.")
+    reason = lgb_import_error or "unknown import failure"
+    print(f"LightGBM not available ({reason}). Skipped hyperparameter tuning.")
 
 # If binary label, save ROC AUC
 if y.nunique() == 2:
