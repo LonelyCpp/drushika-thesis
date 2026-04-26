@@ -1,0 +1,31 @@
+/Users/ananthu/.pyenv/versions/3.14.3/lib/python3.14/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+Loaded 50 validation rows
+Label distribution:
+ Risk
+HIGH        34
+MODERATE     6
+NO           6
+LOW          4
+Name: count, dtype: int64
+
+Accuracy: 0.8000
+
+Classification Report:
+              precision    recall  f1-score   support
+
+        HIGH       0.87      1.00      0.93        34
+         LOW       0.44      1.00      0.62         4
+    MODERATE       0.00      0.00      0.00         6
+          NO       1.00      0.33      0.50         6
+
+    accuracy                           0.80        50
+   macro avg       0.58      0.58      0.51        50
+weighted avg       0.75      0.80      0.74        50
+
+Confusion Matrix (rows=actual, cols=predicted):
+Labels: ['HIGH', 'LOW', 'MODERATE', 'NO']
+[[34  0  0  0]
+ [ 0  4  0  0]
+ [ 5  1  0  0]
+ [ 0  4  0  2]]

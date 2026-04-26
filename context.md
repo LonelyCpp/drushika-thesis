@@ -75,3 +75,39 @@ When interacting with the model, begin message like:
 64-72 – low caries risk
 56 -64 moderate caries risk 
 56 or less high caries risk
+
+---
+
+## Operational Brief (for future runs)
+
+### Files
+- `data.csv` — training dataset (header row: `Age,Sex,Diet Score,Risk`). Risk values: `HIGH`, `MODERATE`, `LOW`, `NO`.
+- `validate.csv` — external validation set (no header, same column order). Labels are abbreviated: `H`, `M`, `L`, `NO`.
+- `trainer.py` — fits preprocessor, baseline LR, baseline LightGBM, and tuned LightGBM via RandomizedSearchCV. Writes models + preprocessor to `model_outputs/`.
+- `evaluate_models.py` — loads saved artifacts, recreates the deterministic 70/30 split, and writes `confusion_matrix.png`, `feature_importance.png`, `feature_importances.csv`, and `shap_summary.png`. Does **not** write `results.md` — that file is maintained by hand.
+- `validate_model.py` — runs the saved tuned model against `validate.csv` and prints accuracy / classification report / confusion matrix.
+
+### Standard refresh workflow (after data.csv changes)
+```bash
+python3 trainer.py && python3 evaluate_models.py 2>&1 | tee model_outputs/eval_run.log
+python3 validate_model.py 2>&1 | tee model_outputs/validate_run.log
+```
+Then update `README.md` and `model_outputs/results.md` from the two log files.
+
+### Key settings (must stay consistent across trainer.py and evaluate_models.py)
+- `RANDOM_STATE = 42`
+- `TEST_SIZE = 0.30` (stratified)
+- `TARGET_COLUMN = "Risk"`
+- 4-fold CV, 20 RandomizedSearchCV iterations
+- Scoring: `f1_weighted` (multi-class)
+
+### Data quirks to remember
+- `validate.csv` has **no header row**, abbreviated labels (`H/M/L/NO`), and label-rubric inconsistencies near the HIGH/MOD/LOW boundaries. The 80% external accuracy reported in `README.md` reflects this; a relabeled clean validation set is the planned fix.
+- Negative Diet Scores in `validate.csv` were originally data-entry errors. Per the clinician's instruction (2026-04-26), negatives are flipped to positive (HIGH risk by rubric).
+- Training data has its own rubric overlaps (e.g., HIGH labels on DS up to 85, NO down to 64). Don't assume strict rubric compliance when reasoning about predictions.
+
+### Output artifacts (under `model_outputs/`)
+- `baseline_model.joblib`, `lgb_tuned_model.joblib`, `preprocessor.joblib` — saved sklearn artifacts
+- `feature_importances.csv`, `feature_importance.png`, `confusion_matrix.png`, `shap_summary.png`
+- `results.md` — hand-maintained metrics summary
+- `eval_run.log`, `validate_run.log` — most recent run captures (regenerated via `tee`)
