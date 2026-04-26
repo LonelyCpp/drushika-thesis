@@ -1,0 +1,55 @@
+
+===== Baseline LightGBM =====
+Accuracy: 0.9333
+
+Classification Report:
+               precision    recall  f1-score   support
+
+        HIGH       0.98      0.97      0.98       189
+         LOW       0.71      0.89      0.79        19
+    MODERATE       0.67      0.67      0.67        15
+          NO       0.93      0.76      0.84        17
+
+    accuracy                           0.93       240
+   macro avg       0.82      0.82      0.82       240
+weighted avg       0.94      0.93      0.93       240
+
+Confusion Matrix:
+ [[184   1   3   1]
+ [  0  17   2   0]
+ [  3   2  10   0]
+ [  0   4   0  13]]
+
+===== Tuned LightGBM =====
+Accuracy: 0.9292
+
+Classification Report:
+               precision    recall  f1-score   support
+
+        HIGH       0.99      0.97      0.98       189
+         LOW       0.70      0.84      0.76        19
+    MODERATE       0.62      0.67      0.65        15
+          NO       0.88      0.82      0.85        17
+
+    accuracy                           0.93       240
+   macro avg       0.80      0.83      0.81       240
+weighted avg       0.94      0.93      0.93       240
+
+Confusion Matrix:
+ [[183   1   4   1]
+ [  0  16   2   1]
+ [  2   3  10   0]
+ [  0   3   0  14]]
+
+Generating visualizations with: Tuned LightGBM
+Confusion matrix image saved to ./model_outputs/confusion_matrix.png
+Feature importance CSV saved to ./model_outputs/feature_importances.csv
+Feature importance plot saved to ./model_outputs/feature_importance.png
+Debug: X_sample shape: (240, 3), model expects: 3 features
+Debug: Raw SHAP values type: <class 'numpy.ndarray'>
+Debug: SHAP values shape: (240, 3, 4)
+Debug: SHAP values is 3D with shape (240, 3, 4), extracting first class
+Debug: Final SHAP values shape after extraction: (240, 3)
+Debug: Feature names count: 3, names: ['Age', 'Diet Score', 'Sex']
+Debug: Final shapes - SHAP: (240, 3), Data: (240, 3), Names: 3
+SHAP summary plot saved to ./model_outputs/shap_summary.png

@@ -237,11 +237,26 @@ def save_shap_summary_plot(model, X_test, feature_names, output_path):
         n_shap_features = shap_values_to_plot.shape[1]
         n_data_features = X_sample.shape[1]
         
-        # Use model's feature importances to get the correct feature names
+        # Prefer the real feature names from the preprocessor over generic
+        # placeholders (LightGBM stores Column_0/1/... when fit on a NumPy array).
+        def _looks_generic(names):
+            if not names:
+                return True
+            import re
+            return all(re.fullmatch(r"(Column|feature|f)_?\d+", str(n)) for n in names)
+
+        model_names = None
         if hasattr(model, 'feature_name_') and model.feature_name_:
-            feature_names_working = model.feature_name_
+            model_names = list(model.feature_name_)
         elif hasattr(model, 'feature_names_in_') and model.feature_names_in_ is not None:
-            feature_names_working = list(model.feature_names_in_)
+            model_names = list(model.feature_names_in_)
+
+        if feature_names and not _looks_generic(feature_names):
+            feature_names_working = list(feature_names)
+        elif model_names and not _looks_generic(model_names):
+            feature_names_working = model_names
+        elif model_names:
+            feature_names_working = model_names
         elif feature_names:
             feature_names_working = list(feature_names)
         else:

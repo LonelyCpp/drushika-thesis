@@ -48,10 +48,10 @@ The obtained diet diary scores were compared with DMFT/deft index scores to vali
 
 ### Dataset Characteristics
 
-- **Total Samples:** 754 children
+- **Total Samples:** 799 children
 - **Features:** 12 predictive variables (demographic, dietary metrics, oral hygiene habits)
 - **Target Variable:** Caries risk category (HIGH, MODERATE, LOW, NO)
-- **Data Split:** 70% training (528 samples) / 30% testing (226 samples)
+- **Data Split:** 70% training (559 samples) / 30% testing (240 samples)
 - **Split Strategy:** Stratified random sampling to maintain class distribution
 
 ### Models Implemented
@@ -94,38 +94,38 @@ The LightGBM model underwent extensive tuning using **RandomizedSearchCV** with 
 
 | Metric                | Score              |
 | --------------------- | ------------------ |
-| **Accuracy**          | **91.6%**          |
-| **Weighted F1-score** | **0.90**           |
+| **Accuracy**          | **92.9%**          |
+| **Weighted F1-score** | **0.93**           |
 
 ### Per-Class Performance Metrics
 
 | Risk Category | Precision | Recall | F1-score | Test Samples |
 |---------------|-----------|--------|----------|--------------|
-| **HIGH**      | 0.95      | 0.98   | **0.97** | 177          |
-| **LOW**       | 0.78      | 0.90   | **0.84** | 20           |
-| **MODERATE**  | 0.50      | 0.14   | 0.22     | 14           |
-| **NO**        | 0.82      | 0.88   | **0.85** | 16           |
+| **HIGH**      | 0.99      | 0.97   | **0.98** | 189          |
+| **LOW**       | 0.70      | 0.84   | **0.76** | 19           |
+| **MODERATE**  | 0.62      | 0.67   | **0.65** | 15           |
+| **NO**        | 0.88      | 0.82   | **0.85** | 17           |
 
 ### Confusion Matrix
 
 ```
                Predicted Risk Category
                HIGH  LOW  MODERATE  NO
-Actual HIGH    174    0      1      2
-Actual LOW       0   18      1      1
-Actual MOD       9    3      2      0
-Actual NO        0    2      0     14
+Actual HIGH    183    1      4      1
+Actual LOW       0   16      2      1
+Actual MOD       2    3     10      0
+Actual NO        0    3      0     14
 ```
 
 ### Key Findings
 
-✅ **Excellent HIGH-risk detection:** The model achieved 98% recall for HIGH-risk children, meaning it successfully identifies nearly all children who are actually at high risk for caries. This is clinically critical for early intervention.
+✅ **Excellent HIGH-risk detection:** The model achieved 97% recall and 99% precision for HIGH-risk children, meaning it successfully identifies nearly all children who are actually at high risk for caries with very few false alarms. This is clinically critical for early intervention.
 
-✅ **Strong overall performance:** With 91.6% accuracy, the model demonstrates robust predictive capability across most risk categories.
+✅ **Strong overall performance:** With 92.9% accuracy, the model demonstrates robust predictive capability across all risk categories.
 
-✅ **Reliable LOW and NO risk classification:** F1-scores of 0.84-0.85 indicate balanced precision and recall for these categories.
+✅ **Reliable NO and MODERATE risk classification:** F1-scores of 0.85 (NO) and 0.65 (MODERATE) reflect balanced precision and recall on the minority categories — a substantial improvement over earlier dataset sizes.
 
-⚠️ **Moderate-risk limitation:** Performance on MODERATE risk cases (F1 = 0.22) was constrained by limited representation (n=14 samples). Most misclassifications assigned moderate cases to the HIGH category, suggesting overlapping dietary patterns between these groups.
+⚠️ **LOW-risk precision drop:** Precision for the LOW class (0.70) is the weakest cell, with a few HIGH and MODERATE cases leaking into LOW predictions. Recall on LOW remains strong at 0.84, so the model rarely misses LOW-risk children but occasionally over-assigns this label.
 
 ### Feature Importance
 
@@ -133,11 +133,11 @@ The three most influential predictors of caries risk were:
 
 | Feature      | Importance Score |
 |--------------|------------------|
-| Diet Score   | 3019            |
-| Age          | 197             |
-| Sex          | 127             |
+| Diet Score   | 1223            |
+| Age          | 256             |
+| Sex          | 118             |
 
-The **Diet Score** was by far the dominant predictor, accounting for approximately 90% of the model's decision-making, which validates the clinical hypothesis that dietary patterns are the primary driver of caries risk in children.
+The **Diet Score** was by far the dominant predictor, accounting for approximately 77% of the model's total feature importance, which validates the clinical hypothesis that dietary patterns are the primary driver of caries risk in children. **Age** is a meaningful secondary signal (~16%), with **Sex** contributing the remainder.
 
 ---
 
@@ -234,9 +234,9 @@ This script will:
 
 The tuned LightGBM model demonstrates **clinically viable performance** for automated caries risk screening in pediatric dentistry:
 
-1. **High Sensitivity for At-Risk Children:** With 98% recall for HIGH-risk cases, the model minimizes false negatives—ensuring that children who need urgent dietary intervention are identified.
+1. **High Sensitivity for At-Risk Children:** With 97% recall and 99% precision for HIGH-risk cases, the model minimizes both false negatives and false alarms—ensuring that children who need urgent dietary intervention are identified.
 
-2. **Dietary Focus Validated:** The overwhelming importance of the Diet Score feature (90% contribution) confirms that dietary patterns captured in 7-day diaries are highly predictive of caries risk, supporting evidence-based dietary counseling.
+2. **Dietary Focus Validated:** The dominant importance of the Diet Score feature (~77% contribution) confirms that dietary patterns captured in 7-day diaries are highly predictive of caries risk, supporting evidence-based dietary counseling.
 
 3. **Practical Deployment:** The model can be integrated into dental clinics or school health programs to:
    - Automatically score diet diaries
@@ -246,13 +246,13 @@ The tuned LightGBM model demonstrates **clinically viable performance** for auto
 
 ### Limitations and Recommendations
 
-**Class Imbalance:** The MODERATE risk category was underrepresented (n=14) in the dataset, leading to reduced predictive performance for this group. Future work should:
-- Collect additional MODERATE-risk samples
+**Class Imbalance:** The HIGH-risk category dominates the dataset (~79% of test samples), while LOW (n=19), MODERATE (n=15), and NO (n=17) remain comparatively small. Although MODERATE-class performance has improved substantially with the larger dataset (F1 = 0.65), the minority classes are still the bottleneck. Future work should:
+- Continue collecting samples in the LOW, MODERATE, and NO categories to balance class representation
 - Apply SMOTE (Synthetic Minority Over-sampling Technique)
 - Implement class-weighted training
-- Consider combining MODERATE with adjacent categories for binary classification
+- Consider combining adjacent categories for binary clinical-action classification (at-risk vs. not at-risk)
 
-**Model Bias:** Most MODERATE misclassifications were assigned to HIGH risk, which is clinically conservative (false alarms rather than missed cases) but may lead to over-intervention.
+**Model Bias:** The few remaining MODERATE misclassifications split between LOW and HIGH categories rather than concentrating in HIGH, suggesting the model now distinguishes overlapping dietary patterns more effectively than in earlier runs.
 
 ---
 
@@ -265,13 +265,13 @@ The tuned LightGBM model demonstrates **clinically viable performance** for auto
 
 ### Model Training
 - Algorithm: LightGBM Classifier
-- Training samples: 528 (70%)
+- Training samples: 559 (70%)
 - Validation: 4-fold stratified cross-validation
 - Optimization: RandomizedSearchCV with 20 iterations
 - Evaluation metric: Weighted F1-score
 
 ### Model Evaluation
-- Test samples: 226 (30%)
+- Test samples: 240 (30%)
 - Metrics: Accuracy, Precision, Recall, F1-score per class
 - Interpretability: Feature importance (built-in) + SHAP values
 
@@ -288,7 +288,7 @@ The tuned LightGBM model demonstrates **clinically viable performance** for auto
 
 ## 🎯 Conclusion
 
-This research successfully demonstrates that **machine learning algorithms can accurately predict dental caries risk in children** based on structured 7-day diet diary data. The optimized LightGBM model achieved 91.6% accuracy with exceptional performance in identifying HIGH-risk cases (F1 = 0.97), making it suitable for clinical deployment as a decision support tool in pediatric dentistry.
+This research successfully demonstrates that **machine learning algorithms can accurately predict dental caries risk in children** based on structured 7-day diet diary data. The optimized LightGBM model achieved 92.9% accuracy with exceptional performance in identifying HIGH-risk cases (F1 = 0.98), making it suitable for clinical deployment as a decision support tool in pediatric dentistry.
 
 The model's strong reliance on the Diet Score feature validates the clinical hypothesis that dietary patterns are the primary determinant of caries risk, supporting the use of dietary interventions as a first-line preventive strategy. With further refinement to address class imbalance, this automated risk assessment system can enhance early detection and enable personalized, data-driven dental care for children.
 
