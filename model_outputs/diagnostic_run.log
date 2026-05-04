@@ -1,0 +1,43 @@
+/Users/ananthu/.pyenv/versions/3.14.3/lib/python3.14/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+/Users/ananthu/.pyenv/versions/3.14.3/lib/python3.14/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+/Users/ananthu/.pyenv/versions/3.14.3/lib/python3.14/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+/Users/ananthu/.pyenv/versions/3.14.3/lib/python3.14/site-packages/sklearn/utils/validation.py:2749: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+/Users/ananthu/side/drushika/diagnostic_analysis.py:138: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  var = float(L @ cov @ L.T)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:141: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  z = float((L @ aucs)) / np.sqrt(var)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:138: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  var = float(L @ cov @ L.T)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:141: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  z = float((L @ aucs)) / np.sqrt(var)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:138: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  var = float(L @ cov @ L.T)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:141: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  z = float((L @ aucs)) / np.sqrt(var)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:138: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  var = float(L @ cov @ L.T)
+/Users/ananthu/side/drushika/diagnostic_analysis.py:141: DeprecationWarning: Conversion of an array with ndim > 0 to a scalar is deprecated, and will error in future. Ensure you extract a single element from your array before performing this operation. (Deprecated NumPy 1.25.)
+  z = float((L @ aucs)) / np.sqrt(var)
+Classes: ['HIGH', 'LOW', 'MODERATE', 'NO'], test n=240
+
+=== Per-class metrics with 95% CIs ===
+[Tuned LightGBM]     HIGH  AUC=0.973 (0.930-0.999)  Sens=0.979 (0.957-0.995)  Spec=0.941 (0.878-1.000)  PPV=0.984 (0.966-1.000)  NPV=0.923 (0.842-0.983)
+[Baseline LightGBM]     HIGH  AUC=0.987 (0.970-0.998)  Sens=0.979 (0.957-0.995)  Spec=0.922 (0.843-0.983)  PPV=0.979 (0.957-0.995)  NPV=0.922 (0.839-0.982)
+[Tuned LightGBM]      LOW  AUC=0.987 (0.974-0.997)  Sens=0.842 (0.650-1.000)  Spec=0.977 (0.955-0.995)  PPV=0.762 (0.571-0.941)  NPV=0.986 (0.968-1.000)
+[Baseline LightGBM]      LOW  AUC=0.983 (0.967-0.995)  Sens=0.895 (0.737-1.000)  Spec=0.973 (0.950-0.991)  PPV=0.739 (0.560-0.917)  NPV=0.991 (0.977-1.000)
+[Tuned LightGBM] MODERATE  AUC=0.914 (0.801-0.983)  Sens=0.600 (0.333-0.867)  Spec=0.978 (0.957-0.996)  PPV=0.643 (0.364-0.889)  NPV=0.973 (0.951-0.991)
+[Baseline LightGBM] MODERATE  AUC=0.919 (0.816-0.982)  Sens=0.600 (0.333-0.867)  Spec=0.978 (0.957-0.996)  PPV=0.643 (0.364-0.889)  NPV=0.973 (0.951-0.991)
+[Tuned LightGBM]       NO  AUC=0.989 (0.972-1.000)  Sens=0.882 (0.706-1.000)  Spec=0.991 (0.977-1.000)  PPV=0.882 (0.714-1.000)  NPV=0.991 (0.977-1.000)
+[Baseline LightGBM]       NO  AUC=0.989 (0.969-1.000)  Sens=0.765 (0.545-0.947)  Spec=0.996 (0.986-1.000)  PPV=0.929 (0.765-1.000)  NPV=0.982 (0.964-0.996)
+
+=== DeLong's test: Tuned vs Baseline (per class) ===
+      HIGH  AUC tuned=0.9728  AUC base=0.9871  p=0.2203 
+       LOW  AUC tuned=0.9875  AUC base=0.9827  p=0.1557 
+  MODERATE  AUC tuned=0.9141  AUC base=0.9185  p=0.4818 
+        NO  AUC tuned=0.9894  AUC base=0.9889  p=0.8542 
+
+Saved diagnostic_metrics.csv and delong_test.csv to ./model_outputs/
