@@ -39,8 +39,16 @@ PREPROCESSOR_FILE = "preprocessor.joblib"
 MODEL_FILES = {
     "Baseline LightGBM": "baseline_model.joblib",
     "Tuned LightGBM": "lgb_tuned_model.joblib",
+    "Baseline XGBoost": "xgb_baseline_model.joblib",
+    "Tuned XGBoost": "xgb_tuned_model.joblib",
 }
-MODEL_PRIORITY = ["Tuned LightGBM", "Baseline LightGBM"]
+XGB_LABEL_ENCODER_FILE = "xgb_label_encoder.joblib"
+MODEL_PRIORITY = [
+    "Tuned LightGBM",
+    "Tuned XGBoost",
+    "Baseline LightGBM",
+    "Baseline XGBoost",
+]
 
 CONFUSION_MATRIX_IMG = "confusion_matrix.png"
 FEATURE_IMPORTANCE_CSV = "feature_importances.csv"
@@ -118,9 +126,11 @@ def extract_feature_names(preproc):
     return feature_names
 
 
-def evaluate_model(model, X_test, y_test, label):
+def evaluate_model(model, X_test, y_test, label, label_encoder=None):
     """Print metrics for a single model and return predictions."""
     y_pred = model.predict(X_test)
+    if label_encoder is not None:
+        y_pred = label_encoder.inverse_transform(y_pred)
     print(f"\n===== {label} =====")
     print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
     print("\nClassification Report:\n", classification_report(y_test, y_pred, zero_division=0))
@@ -371,6 +381,9 @@ def main():
             feature_names = feature_names[: X_test_array.shape[1]]
     X_test = pd.DataFrame(X_test_array, columns=feature_names)
 
+    xgb_encoder_path = os.path.join(OUTPUT_DIR, XGB_LABEL_ENCODER_FILE)
+    xgb_label_encoder = joblib.load(xgb_encoder_path) if os.path.exists(xgb_encoder_path) else None
+
     evaluation_results = {}
     for label, filename in MODEL_FILES.items():
         model_path = os.path.join(OUTPUT_DIR, filename)
@@ -378,8 +391,12 @@ def main():
             print(f"Skipping {label} (missing artifact at {model_path}).")
             continue
         model = joblib.load(model_path)
-        y_pred = evaluate_model(model, X_test, y_test, label)
-        evaluation_results[label] = {"model": model, "y_pred": y_pred}
+        encoder = xgb_label_encoder if "XGBoost" in label else None
+        if "XGBoost" in label and encoder is None:
+            print(f"Skipping {label} (XGB label encoder missing at {xgb_encoder_path}).")
+            continue
+        y_pred = evaluate_model(model, X_test, y_test, label, label_encoder=encoder)
+        evaluation_results[label] = {"model": model, "y_pred": y_pred, "encoder": encoder}
 
     if not evaluation_results:
         raise RuntimeError("No saved models were found for evaluation.")

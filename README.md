@@ -66,17 +66,34 @@ A state-of-the-art gradient boosting framework optimized for:
 - Providing feature importance rankings
 - Computational efficiency with large datasets
 
+#### 3. Comparison Model: XGBoost (Gradient Boosting)
+XGBoost was trained as a head-to-head benchmark for LightGBM. Both are leading gradient-boosting frameworks but differ in tree-growth strategy (LightGBM uses leaf-wise growth; XGBoost uses depth-wise / level-wise growth) and in their default regularization. Including XGBoost establishes whether LightGBM's accuracy is a property of gradient boosting in general, or of LightGBM's specific design choices on this dataset.
+
 ### Hyperparameter Optimization
 
-The LightGBM model underwent extensive tuning using **RandomizedSearchCV** with 4-fold stratified cross-validation:
+Both gradient-boosting models underwent identical tuning using **RandomizedSearchCV** with 4-fold stratified cross-validation (20 candidates each), so the comparison is on equal footing.
 
-**Search Space:**
+**LightGBM search space:**
 ```python
 {
   "num_leaves": [15, 31, 63, 127],
   "n_estimators": [50, 100, 200, 400],
   "learning_rate": [0.01, 0.05, 0.1],
   "min_child_samples": [5, 10, 20, 50],
+  "subsample": [0.6, 0.8, 1.0],
+  "colsample_bytree": [0.6, 0.8, 1.0],
+  "reg_alpha": [0, 0.01, 0.1],
+  "reg_lambda": [0, 0.01, 0.1]
+}
+```
+
+**XGBoost search space (analogous):**
+```python
+{
+  "max_depth": [3, 5, 7, 9],
+  "n_estimators": [50, 100, 200, 400],
+  "learning_rate": [0.01, 0.05, 0.1],
+  "min_child_weight": [1, 3, 5, 10],
   "subsample": [0.6, 0.8, 1.0],
   "colsample_bytree": [0.6, 0.8, 1.0],
   "reg_alpha": [0, 0.01, 0.1],
@@ -126,6 +143,32 @@ Actual NO        0    2      0     15
 ✅ **Reliable NO and LOW risk classification:** F1-scores of 0.88 (NO) and 0.80 (LOW) reflect balanced precision and recall on these minority categories — a substantial improvement over earlier dataset sizes.
 
 ⚠️ **MODERATE-risk remains hardest:** The MODERATE class (F1 = 0.62, recall = 0.60) is the weakest cell, with misclassifications split between LOW (n=3) and HIGH (n=3) — consistent with the clinical observation that moderate-risk dietary patterns sit at a continuous overlap between the two adjacent classes. Limited representation in the dataset (n=15 in the test set) is the primary driver.
+
+### Model Comparison: LightGBM vs. XGBoost
+
+Both gradient-boosting models were trained and tuned under identical protocols (same train/test split, same CV strategy, analogous search spaces, weighted-F1 scoring) to isolate algorithmic differences.
+
+| Metric                | Tuned LightGBM | Tuned XGBoost |
+|-----------------------|----------------|---------------|
+| **Accuracy**          | **93.75%**     | **93.75%**    |
+| **Weighted F1-score** | **0.94**       | **0.94**      |
+| **Macro F1-score**    | **0.82**       | **0.81**      |
+
+**Per-class F1 comparison:**
+
+| Risk Category | LightGBM | XGBoost | Test Samples |
+|---------------|----------|---------|--------------|
+| **HIGH**      | 0.98     | **0.99**| 189          |
+| **LOW**       | **0.80** | 0.73    | 19           |
+| **MODERATE**  | **0.62** | 0.57    | 15           |
+| **NO**        | 0.88     | **0.94**| 17           |
+
+**Interpretation.** The two models are tied on overall accuracy and weighted F1, which is the expected outcome for two well-tuned gradient-boosting frameworks on the same tabular problem. They diverge on the minority classes:
+
+- **LightGBM is stronger on the boundary classes (LOW, MODERATE)**, the cells most relevant to clinical triage, where the leaf-wise growth strategy appears to capture the narrow dietary-pattern differences better.
+- **XGBoost is stronger on HIGH and NO**, the two extremes of the risk scale, with marginally more conservative HIGH precision (0.99 vs. 0.98) and a notable improvement on NO (F1 0.94 vs. 0.88).
+
+**Choice of primary model.** LightGBM remains the primary model because (1) its advantage is concentrated on the MODERATE and LOW classes, which are the analytically harder cells and the most informative for early intervention, and (2) macro-F1 (which weights all classes equally) is marginally higher (0.82 vs. 0.81). XGBoost is retained as a published, identically-tuned benchmark to demonstrate that the result is not framework-dependent.
 
 ### Feature Importance
 
@@ -236,8 +279,11 @@ drushika/
 ├── requirements.txt            # Python dependencies
 ├── context.md                  # Project methodology documentation
 └── model_outputs/              # Generated artifacts
-    ├── baseline_model.joblib       # Trained Logistic Regression model
-    ├── lgb_tuned_model.joblib      # Optimized LightGBM model
+    ├── baseline_model.joblib       # Baseline LightGBM model
+    ├── lgb_tuned_model.joblib      # Optimized LightGBM model (primary)
+    ├── xgb_baseline_model.joblib   # Baseline XGBoost model
+    ├── xgb_tuned_model.joblib      # Optimized XGBoost model (comparison)
+    ├── xgb_label_encoder.joblib    # Label encoder for XGBoost predictions
     ├── preprocessor.joblib         # Data preprocessing pipeline
     ├── confusion_matrix.png        # Classification confusion matrix
     ├── feature_importance.png      # Feature importance visualization
@@ -258,9 +304,10 @@ This script will:
 1. Load and preprocess the diet diary dataset
 2. Split data into training (70%) and test (30%) sets
 3. Train baseline Logistic Regression model
-4. Train baseline LightGBM model
-5. Perform hyperparameter tuning with cross-validation
-6. Save all trained models to `model_outputs/`
+4. Train baseline + tuned LightGBM model
+5. Train baseline + tuned XGBoost model (head-to-head comparison)
+6. Perform hyperparameter tuning with cross-validation for both gradient-boosting models
+7. Save all trained models to `model_outputs/`
 
 #### Evaluating the Model
 
@@ -313,10 +360,11 @@ The tuned LightGBM model demonstrates **clinically viable performance** for auto
 - Feature scaling not required (tree-based models are scale-invariant)
 
 ### Model Training
-- Algorithm: LightGBM Classifier
+- Primary algorithm: LightGBM Classifier
+- Comparison algorithm: XGBoost Classifier (tuned with an analogous search space)
 - Training samples: 560 (70%)
 - Validation: 4-fold stratified cross-validation
-- Optimization: RandomizedSearchCV with 20 iterations
+- Optimization: RandomizedSearchCV with 20 iterations (per algorithm)
 - Evaluation metric: Weighted F1-score
 
 ### Model Evaluation
@@ -327,7 +375,8 @@ The tuned LightGBM model demonstrates **clinically viable performance** for auto
 ### Software Stack
 - **Python 3.8+**
 - **Scikit-learn 1.7.2** (preprocessing, baseline models, evaluation)
-- **LightGBM 4.6.0** (gradient boosting classifier)
+- **LightGBM 4.6.0** (primary gradient boosting classifier)
+- **XGBoost 3.2.0** (comparison gradient boosting classifier)
 - **Pandas 2.3.3** & **NumPy 2.3.4** (data manipulation)
 - **Matplotlib 3.10.7** (visualization)
 - **SHAP** (model interpretability)

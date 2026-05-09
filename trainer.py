@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, StratifiedKFold
-from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
@@ -182,6 +182,75 @@ if LGB:
 else:
     reason = lgb_import_error or "unknown import failure"
     print(f"LightGBM not available ({reason}). Skipped hyperparameter tuning.")
+
+# XGBoost training and tuning (for head-to-head comparison with LightGBM)
+XGB = True
+xgb_import_error = None
+try:
+    import xgboost as xgb
+except ModuleNotFoundError as exc:
+    XGB = False
+    xgb_import_error = f"{exc.__class__.__name__}: {exc}"
+except Exception as exc:
+    raise RuntimeError("xgboost is installed but failed to import.") from exc
+
+if XGB:
+    # XGBoost requires integer-encoded labels for multi-class. Persist the encoder
+    # alongside the model so evaluation can decode predictions back to strings.
+    label_encoder = LabelEncoder()
+    y_train_enc = label_encoder.fit_transform(y_train)
+    y_test_enc = label_encoder.transform(y_test)
+    joblib.dump(label_encoder, os.path.join(OUTPUT_DIR, "xgb_label_encoder.joblib"))
+
+    xgb_baseline = xgb.XGBClassifier(
+        random_state=RANDOM_STATE,
+        n_jobs=4,
+        eval_metric="mlogloss",
+        tree_method="hist",
+    )
+    xgb_baseline.fit(X_train, y_train_enc)
+    y_pred_xgb_base_enc = xgb_baseline.predict(X_test)
+    y_pred_xgb_base = label_encoder.inverse_transform(y_pred_xgb_base_enc)
+    print("Baseline XGBoost report:\n", classification_report(y_test, y_pred_xgb_base))
+    print("Confusion matrix (XGBoost baseline):\n", confusion_matrix(y_test, y_pred_xgb_base))
+    joblib.dump(xgb_baseline, os.path.join(OUTPUT_DIR, "xgb_baseline_model.joblib"))
+
+    xgb_param_dist = {
+        "max_depth": [3, 5, 7, 9],
+        "n_estimators": [50, 100, 200, 400],
+        "learning_rate": [0.01, 0.05, 0.1],
+        "min_child_weight": [1, 3, 5, 10],
+        "subsample": [0.6, 0.8, 1.0],
+        "colsample_bytree": [0.6, 0.8, 1.0],
+        "reg_alpha": [0, 0.01, 0.1],
+        "reg_lambda": [0, 0.01, 0.1],
+    }
+    xgb_scoring = "f1" if y.nunique() == 2 else "f1_weighted"
+    xgb_rs = RandomizedSearchCV(
+        xgb.XGBClassifier(
+            random_state=RANDOM_STATE,
+            n_jobs=4,
+            eval_metric="mlogloss",
+            tree_method="hist",
+        ),
+        param_distributions=xgb_param_dist,
+        n_iter=N_ITER_SEARCH,
+        scoring=xgb_scoring,
+        cv=StratifiedKFold(n_splits=CV_FOLDS, shuffle=True, random_state=RANDOM_STATE),
+        random_state=RANDOM_STATE,
+        n_jobs=1,
+        verbose=1,
+    )
+    xgb_rs.fit(X_train, y_train_enc)
+    print("Best XGBoost params:", xgb_rs.best_params_)
+    xgb_best = xgb_rs.best_estimator_
+    joblib.dump(xgb_best, os.path.join(OUTPUT_DIR, "xgb_tuned_model.joblib"))
+    y_pred_xgb_best = label_encoder.inverse_transform(xgb_best.predict(X_test))
+    print("Tuned XGBoost report:\n", classification_report(y_test, y_pred_xgb_best))
+    print("Confusion matrix (XGBoost tuned):\n", confusion_matrix(y_test, y_pred_xgb_best))
+else:
+    reason = xgb_import_error or "unknown import failure"
+    print(f"XGBoost not available ({reason}). Skipping XGBoost training.")
 
 # If binary label, save ROC AUC
 if y.nunique() == 2:
