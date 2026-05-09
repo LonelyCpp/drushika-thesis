@@ -1,4 +1,10 @@
 model,class,auc,support
+Logistic Regression,HIGH,0.9858,189
+Logistic Regression,LOW,0.9734,19
+Logistic Regression,MODERATE,0.9133,15
+Logistic Regression,NO,0.9953,17
+Logistic Regression,MACRO,0.967,240
+Logistic Regression,WEIGHTED,0.981,240
 Baseline LightGBM,HIGH,0.9871,189
 Baseline LightGBM,LOW,0.9827,19
 Baseline LightGBM,MODERATE,0.9185,15

@@ -39,6 +39,7 @@ TEST_SIZE = 0.30
 OUTPUT_DIR = "./model_outputs"
 PREPROCESSOR_FILE = "preprocessor.joblib"
 MODEL_FILES = {
+    "Logistic Regression": "logistic_regression.joblib",
     "Baseline LightGBM": "baseline_model.joblib",
     "Tuned LightGBM": "lgb_tuned_model.joblib",
     "Baseline XGBoost": "xgb_baseline_model.joblib",
@@ -50,7 +51,15 @@ MODEL_PRIORITY = [
     "Tuned XGBoost",
     "Baseline LightGBM",
     "Baseline XGBoost",
+    "Logistic Regression",
 ]
+# Models included in the paper-style multi-model comparison (one row per algorithm)
+PAPER_STYLE_MODELS = ["Logistic Regression", "Tuned LightGBM", "Tuned XGBoost"]
+PAPER_STYLE_DISPLAY = {
+    "Logistic Regression": "Logistic Regression",
+    "Tuned LightGBM": "LightGBM",
+    "Tuned XGBoost": "XGBoost",
+}
 
 CONFUSION_MATRIX_IMG = "confusion_matrix.png"
 FEATURE_IMPORTANCE_CSV = "feature_importances.csv"
@@ -58,6 +67,9 @@ FEATURE_IMPORTANCE_IMG = "feature_importance.png"
 SHAP_SUMMARY_IMG = "shap_summary.png"
 ROC_SUMMARY_CSV = "roc_auc_summary.csv"
 ROC_COMPARISON_IMG = "roc_comparison.png"
+PAPER_METRICS_CSV = "paper_style_metrics.csv"
+PAPER_METRICS_BAR_IMG = "model_performance_bars.png"
+PAPER_ROC_PANEL_IMG = "roc_curves_all_models.png"
 
 # Filename slug per model label (used for per-model ROC plots)
 ROC_PLOT_SLUGS = {
@@ -469,6 +481,138 @@ def save_roc_comparison_plot(roc_lgb, roc_xgb, output_path, label_lgb, label_xgb
     print(f"ROC comparison plot saved to {output_path}")
 
 
+def compute_macro_specificity_sensitivity(y_true, y_pred, labels):
+    """Compute macro-averaged sensitivity and specificity using one-vs-rest.
+
+    Sensitivity for class c = TP_c / (TP_c + FN_c) = recall for c.
+    Specificity for class c = TN_c / (TN_c + FP_c).
+    Returned values are simple averages across classes (macro).
+    """
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    total = cm.sum()
+    sens, spec = [], []
+    per_class = {}
+    for i, cls in enumerate(labels):
+        tp = cm[i, i]
+        fn = cm[i, :].sum() - tp
+        fp = cm[:, i].sum() - tp
+        tn = total - tp - fn - fp
+        sens_c = tp / (tp + fn) if (tp + fn) > 0 else float("nan")
+        spec_c = tn / (tn + fp) if (tn + fp) > 0 else float("nan")
+        sens.append(sens_c)
+        spec.append(spec_c)
+        per_class[str(cls)] = {"sensitivity": sens_c, "specificity": spec_c}
+    macro_sens = float(np.nanmean(sens))
+    macro_spec = float(np.nanmean(spec))
+    return {"macro_sensitivity": macro_sens, "macro_specificity": macro_spec, "per_class": per_class}
+
+
+def compute_paper_style_metrics(y_true, y_pred, roc_data, labels):
+    """Aggregate the per-model metric row used in the paper-style comparison."""
+    from sklearn.metrics import precision_recall_fscore_support
+
+    accuracy = accuracy_score(y_true, y_pred)
+    precision_m, recall_m, f1_m, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="macro", zero_division=0
+    )
+    precision_w, recall_w, f1_w, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="weighted", zero_division=0
+    )
+    sens_spec = compute_macro_specificity_sensitivity(y_true, y_pred, labels)
+
+    auc_macro = float("nan")
+    auc_weighted = float("nan")
+    if roc_data:
+        aucs = np.array([d["auc"] for d in roc_data.values()])
+        supports = np.array([d["support"] for d in roc_data.values()])
+        if len(aucs) > 0:
+            auc_macro = float(aucs.mean())
+            auc_weighted = float(np.average(aucs, weights=supports)) if supports.sum() > 0 else float("nan")
+
+    return {
+        "accuracy": accuracy,
+        "precision_macro": precision_m,
+        "recall_macro": recall_m,
+        "f1_macro": f1_m,
+        "precision_weighted": precision_w,
+        "recall_weighted": recall_w,
+        "f1_weighted": f1_w,
+        "sensitivity_macro": sens_spec["macro_sensitivity"],
+        "specificity_macro": sens_spec["macro_specificity"],
+        "auc_macro": auc_macro,
+        "auc_weighted": auc_weighted,
+    }
+
+
+def save_paper_style_bar_chart(metrics_by_model, output_path):
+    """Grouped bar chart comparing models across Accuracy / Precision / Recall / F1 (macro)."""
+    if not metrics_by_model:
+        return
+    metric_keys = ["accuracy", "precision_macro", "recall_macro", "f1_macro"]
+    metric_labels = ["Accuracy", "Precision", "Recall", "F1-score"]
+    models = list(metrics_by_model.keys())
+    n_models = len(models)
+    n_metrics = len(metric_keys)
+
+    x = np.arange(n_metrics)
+    width = 0.8 / n_models
+    palette = ["#1f77b4", "#d62728", "#ff7f0e", "#2ca02c"]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for i, model in enumerate(models):
+        values = [metrics_by_model[model][k] for k in metric_keys]
+        offset = (i - (n_models - 1) / 2) * width
+        bars = ax.bar(x + offset, values, width, label=model, color=palette[i % len(palette)])
+        for bar, v in zip(bars, values):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.005,
+                    f"{v:.2f}", ha="center", va="bottom", fontsize=8)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(metric_labels)
+    ax.set_ylabel("Score (macro-averaged for multiclass)")
+    ax.set_ylim(0, 1.05)
+    ax.set_title("Machine Learning Model Performance Evaluation")
+    ax.legend(loc="lower right", fontsize=10)
+    ax.grid(True, axis="y", alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Paper-style bar chart saved to {output_path}")
+
+
+def save_paper_style_roc_panel(roc_by_model, output_path):
+    """Multi-panel ROC figure with one panel per model (each panel shows per-class ROC curves)."""
+    models = [m for m in roc_by_model if roc_by_model[m]]
+    if not models:
+        return
+
+    n = len(models)
+    cols = n
+    fig, axes = plt.subplots(1, cols, figsize=(6 * cols, 5.5), squeeze=False)
+    panel_letters = ["A", "B", "C", "D"]
+
+    for i, model in enumerate(models):
+        ax = axes[0][i]
+        roc_data = roc_by_model[model]
+        for cls in sorted(roc_data.keys()):
+            d = roc_data[cls]
+            ax.plot(d["fpr"], d["tpr"], lw=2, label=f"{cls} (AUC = {d['auc']:.2f})")
+        ax.plot([0, 1], [0, 1], "k--", lw=1, alpha=0.5)
+        ax.set_xlim(-0.01, 1.01)
+        ax.set_ylim(-0.01, 1.05)
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.set_title(f"({panel_letters[i]}) ROC — {model}")
+        ax.legend(loc="lower right", fontsize=8)
+        ax.grid(True, alpha=0.3)
+
+    plt.suptitle("Receiver Operating Characteristic Curves (one-vs-rest) per Model", y=1.02)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Paper-style ROC panel saved to {output_path}")
+
+
 def build_roc_summary_rows(label, roc_data, total_support):
     """Build per-class + macro/weighted summary rows for a single model."""
     if not roc_data:
@@ -601,6 +745,46 @@ def main():
             "Tuned LightGBM",
             "Tuned XGBoost",
         )
+
+    # ----- Paper-style multi-model comparison (LR / LightGBM / XGBoost) -----
+    print("\n===== Paper-style multi-model comparison =====")
+    class_labels = sorted(pd.unique(np.asarray(y_test)))
+    paper_metrics = {}
+    paper_roc_by_model = {}
+    for source_label in PAPER_STYLE_MODELS:
+        if source_label not in evaluation_results:
+            print(f"Skipping {source_label} (artifact not loaded).")
+            continue
+        display = PAPER_STYLE_DISPLAY.get(source_label, source_label)
+        result = evaluation_results[source_label]
+        roc_data = roc_by_label.get(source_label)
+        metrics = compute_paper_style_metrics(y_test, result["y_pred"], roc_data, class_labels)
+        paper_metrics[display] = metrics
+        if roc_data:
+            paper_roc_by_model[display] = roc_data
+
+        print(
+            f"{display}: acc={metrics['accuracy']:.3f} | "
+            f"P(macro)={metrics['precision_macro']:.3f} | "
+            f"R(macro)={metrics['recall_macro']:.3f} | "
+            f"F1(macro)={metrics['f1_macro']:.3f} | "
+            f"Sens(macro)={metrics['sensitivity_macro']:.3f} | "
+            f"Spec(macro)={metrics['specificity_macro']:.3f} | "
+            f"AUC(macro)={metrics['auc_macro']:.3f}"
+        )
+
+    if paper_metrics:
+        rows = []
+        for model, m in paper_metrics.items():
+            row = {"model": model}
+            for k, v in m.items():
+                row[k] = round(v, 4) if isinstance(v, float) else v
+            rows.append(row)
+        pd.DataFrame(rows).to_csv(os.path.join(OUTPUT_DIR, PAPER_METRICS_CSV), index=False)
+        print(f"Paper-style metrics CSV saved to {os.path.join(OUTPUT_DIR, PAPER_METRICS_CSV)}")
+
+        save_paper_style_bar_chart(paper_metrics, os.path.join(OUTPUT_DIR, PAPER_METRICS_BAR_IMG))
+        save_paper_style_roc_panel(paper_roc_by_model, os.path.join(OUTPUT_DIR, PAPER_ROC_PANEL_IMG))
 
 
 if __name__ == "__main__":

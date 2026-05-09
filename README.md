@@ -192,6 +192,32 @@ F1-score and accuracy are computed at a fixed 0.5 probability cutoff (the defaul
 
 XGBoost is retained as a published, identically-tuned benchmark and surfaces an important nuance: its **higher macro AUC (0.978 vs. 0.966) suggests headroom for further gains via threshold calibration** — a candidate direction for future work if MODERATE-class recall becomes a clinical priority.
 
+### Multi-Model Comparison (Paper-Style)
+
+To benchmark the gradient-boosting models against a simpler baseline using the evaluation framework reported in the recent caries-prediction literature (Bahammam, 2025, *Journal of Clinical Pediatric Dentistry*, 49(5): 158–167), the three trained algorithms — Logistic Regression, LightGBM, and XGBoost — were compared on a single set of macro-averaged metrics. Macro averaging is used here as the multiclass analog of the paper's binary sensitivity/specificity, treating each of the four risk classes as equally important.
+
+#### Performance Summary
+
+| Model               | Accuracy | Precision | Recall | F1-score | Sensitivity | Specificity | AUC (macro) |
+|---------------------|----------|-----------|--------|----------|-------------|-------------|-------------|
+| Logistic Regression | 0.904    | 0.695     | 0.686  | 0.683    | 0.686       | 0.940       | 0.967       |
+| **LightGBM**        | **0.938**| **0.818** | **0.826** | **0.821** | **0.826** | 0.972       | 0.966       |
+| **XGBoost**         | **0.938**| 0.807     | 0.812  | 0.808    | 0.812       | **0.976**   | **0.978**   |
+
+*All metrics except accuracy and AUC are macro-averaged across the four risk classes (HIGH / LOW / MODERATE / NO).*
+
+#### Interpretation
+
+1. **Both gradient-boosting models substantially outperform Logistic Regression** on every metric except specificity. The gap is most striking on macro F1 (LightGBM 0.821 vs. LR 0.683, a 14-point absolute improvement), which reflects LR's particular weakness on the minority MODERATE and LOW classes.
+
+2. **LightGBM and XGBoost achieve identical accuracy** (93.8%) but trade off elsewhere: LightGBM has the higher macro F1, sensitivity, precision, and recall (better hard-prediction quality at the default 0.5 threshold), while XGBoost has the higher specificity and macro AUC (better probability ranking and rejection of negatives).
+
+3. **All three models exhibit very high specificity** (≥ 0.94) — expected in an imbalanced multiclass setting where most of the test set sits in classes other than the one being evaluated, making true negatives easy to accumulate. Sensitivity is the more discriminating axis here.
+
+4. **Comparison with Bahammam (2025).** The reference study reported 85% accuracy for LightGBM on a binary (caries-present vs. absent) prediction task with 500 children. Our LightGBM model achieves 93.8% accuracy on a harder **four-class** risk-stratification task with 800 children. This is consistent with the dietary-focused feature set (dominated by Diet Score) being more discriminative than the broader behavioral/socio-demographic feature set used in the reference study, where signal is spread thinner across many weakly predictive variables.
+
+The bar chart in [model_outputs/model_performance_bars.png](model_outputs/model_performance_bars.png) and the per-model ROC panel in [model_outputs/roc_curves_all_models.png](model_outputs/roc_curves_all_models.png) reproduce the visual format used in the reference paper for direct visual comparison.
+
 ### Feature Importance
 
 The three most influential predictors of caries risk were:
@@ -282,6 +308,16 @@ One-vs-rest ROC curves for each risk class, with per-class AUC. Curves close to 
 
 Side-by-side ROC curves for the two tuned gradient-boosting models, one subplot per risk class. This visualization makes the threshold-independent ranking quality of each model directly comparable per class.
 
+### 6. Multi-Model Performance Bar Chart
+![Performance Bars](model_outputs/model_performance_bars.png)
+
+Grouped bar chart comparing Logistic Regression, LightGBM, and XGBoost across accuracy, precision, recall, and F1-score (macro-averaged). Format mirrors the reference comparison figure in Bahammam (2025).
+
+### 7. ROC Curves Across All Models
+![ROC All Models](model_outputs/roc_curves_all_models.png)
+
+Per-model ROC panel: each subplot shows one model with its four one-vs-rest ROC curves (one per risk class) and the per-class AUC. Format mirrors the reference paper's 4-panel ROC layout.
+
 ---
 
 ## 🛠️ Technical Implementation
@@ -311,6 +347,7 @@ drushika/
 ├── requirements.txt            # Python dependencies
 ├── context.md                  # Project methodology documentation
 └── model_outputs/              # Generated artifacts
+    ├── logistic_regression.joblib  # Baseline Logistic Regression model
     ├── baseline_model.joblib       # Baseline LightGBM model
     ├── lgb_tuned_model.joblib      # Optimized LightGBM model (primary)
     ├── xgb_baseline_model.joblib   # Baseline XGBoost model
@@ -327,6 +364,9 @@ drushika/
     ├── roc_curves_xgb_baseline.png # Per-class ROC curves (baseline XGBoost)
     ├── roc_comparison.png          # Tuned LGBM vs Tuned XGBoost ROC overlay
     ├── roc_auc_summary.csv         # Per-class + macro/weighted AUC for all models
+    ├── model_performance_bars.png  # Paper-style bar chart: LR vs LGBM vs XGB
+    ├── roc_curves_all_models.png   # Paper-style multi-panel ROC (one per model)
+    ├── paper_style_metrics.csv     # Macro-averaged metrics for paper-style comparison
     └── results.md                  # Detailed performance metrics
 ```
 

@@ -112,6 +112,7 @@ lr = LogisticRegression(max_iter=1000)
 lr.fit(X_train, y_train)
 y_pred_lr = lr.predict(X_test)
 print("Logistic Regression report:\n", classification_report(y_test, y_pred_lr))
+joblib.dump(lr, os.path.join(OUTPUT_DIR, "logistic_regression.joblib"))
 
 # LightGBM training and tuning
 LGB = True
