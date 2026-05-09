@@ -168,7 +168,29 @@ Both gradient-boosting models were trained and tuned under identical protocols (
 - **LightGBM is stronger on the boundary classes (LOW, MODERATE)**, the cells most relevant to clinical triage, where the leaf-wise growth strategy appears to capture the narrow dietary-pattern differences better.
 - **XGBoost is stronger on HIGH and NO**, the two extremes of the risk scale, with marginally more conservative HIGH precision (0.99 vs. 0.98) and a notable improvement on NO (F1 0.94 vs. 0.88).
 
-**Choice of primary model.** LightGBM remains the primary model because (1) its advantage is concentrated on the MODERATE and LOW classes, which are the analytically harder cells and the most informative for early intervention, and (2) macro-F1 (which weights all classes equally) is marginally higher (0.82 vs. 0.81). XGBoost is retained as a published, identically-tuned benchmark to demonstrate that the result is not framework-dependent.
+### Threshold-Independent Comparison: ROC / AUC Analysis
+
+F1-score and accuracy are computed at a fixed 0.5 probability cutoff (the default for `predict()`). To evaluate **how well each model ranks children by risk independent of the chosen threshold**, one-vs-rest ROC curves and AUCs were computed for each class on the test set.
+
+**Per-class AUC (one-vs-rest):**
+
+| Risk Category (n) | Tuned LightGBM | Tuned XGBoost |
+|---|---|---|
+| **HIGH** (189)     | 0.973 | **0.988** |
+| **LOW** (19)       | **0.988** | 0.983 |
+| **MODERATE** (15)  | 0.914 | **0.948** |
+| **NO** (17)        | 0.989 | **0.992** |
+| **Macro AUC**      | 0.966 | **0.978** |
+| **Weighted AUC**   | 0.971 | **0.985** |
+
+**Interpretation.** Both models discriminate exceptionally well — every per-class AUC is above 0.91, and most are above 0.97. Importantly, the AUC view **inverts** the F1 picture for the MODERATE class: while LightGBM has the higher F1 there (0.62 vs. 0.57), XGBoost has the higher AUC (0.948 vs. 0.914). The discrepancy is informative — it means XGBoost is producing **better-ordered probability rankings** for MODERATE-risk children, but its predictions at the default 0.5 cutoff are worse on that class. With threshold tuning (e.g., choosing a lower probability threshold for the MODERATE class), XGBoost could likely close or reverse the F1 gap.
+
+**Choice of primary model.** LightGBM remains the primary model for clinical deployment because:
+
+1. **Default-threshold performance** matters in practice — most deployed classifiers use `predict()` rather than calibrated thresholds, and LightGBM's F1 advantage on MODERATE/LOW translates directly to fewer mis-triaged children.
+2. **Macro-F1 at default threshold is higher** (0.82 vs. 0.81), reflecting more balanced per-class performance without operating-point tuning.
+
+XGBoost is retained as a published, identically-tuned benchmark and surfaces an important nuance: its **higher macro AUC (0.978 vs. 0.966) suggests headroom for further gains via threshold calibration** — a candidate direction for future work if MODERATE-class recall becomes a clinical priority.
 
 ### Feature Importance
 
@@ -250,6 +272,16 @@ Bar chart showing the relative contribution of each feature to the model's predi
 
 SHAP (SHapley Additive exPlanations) values illustrating how each feature impacts individual predictions, with color indicating feature values and horizontal position showing positive or negative influence on HIGH-risk classification.
 
+### 4. ROC Curves (Tuned LightGBM)
+![ROC Tuned LightGBM](model_outputs/roc_curves_lgb_tuned.png)
+
+One-vs-rest ROC curves for each risk class, with per-class AUC. Curves close to the top-left corner indicate strong discrimination; the diagonal represents a random classifier (AUC = 0.5).
+
+### 5. ROC Comparison: LightGBM vs. XGBoost
+![ROC Comparison](model_outputs/roc_comparison.png)
+
+Side-by-side ROC curves for the two tuned gradient-boosting models, one subplot per risk class. This visualization makes the threshold-independent ranking quality of each model directly comparable per class.
+
 ---
 
 ## 🛠️ Technical Implementation
@@ -289,6 +321,12 @@ drushika/
     ├── feature_importance.png      # Feature importance visualization
     ├── feature_importances.csv     # Feature importance rankings
     ├── shap_summary.png            # SHAP interpretability plot
+    ├── roc_curves_lgb_tuned.png    # Per-class ROC curves (tuned LightGBM)
+    ├── roc_curves_xgb_tuned.png    # Per-class ROC curves (tuned XGBoost)
+    ├── roc_curves_lgb_baseline.png # Per-class ROC curves (baseline LightGBM)
+    ├── roc_curves_xgb_baseline.png # Per-class ROC curves (baseline XGBoost)
+    ├── roc_comparison.png          # Tuned LGBM vs Tuned XGBoost ROC overlay
+    ├── roc_auc_summary.csv         # Per-class + macro/weighted AUC for all models
     └── results.md                  # Detailed performance metrics
 ```
 
@@ -369,7 +407,8 @@ The tuned LightGBM model demonstrates **clinically viable performance** for auto
 
 ### Model Evaluation
 - Test samples: 240 (30%)
-- Metrics: Accuracy, Precision, Recall, F1-score per class
+- Threshold-dependent metrics: Accuracy, Precision, Recall, F1-score per class
+- Threshold-independent metrics: One-vs-rest ROC curves, per-class AUC, macro/weighted AUC
 - Interpretability: Feature importance (built-in) + SHAP values
 
 ### Software Stack

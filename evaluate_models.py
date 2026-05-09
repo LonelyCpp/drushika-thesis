@@ -15,9 +15,11 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     accuracy_score,
+    auc,
     classification_report,
     confusion_matrix,
     ConfusionMatrixDisplay,
+    roc_curve,
 )
 
 try:
@@ -54,6 +56,16 @@ CONFUSION_MATRIX_IMG = "confusion_matrix.png"
 FEATURE_IMPORTANCE_CSV = "feature_importances.csv"
 FEATURE_IMPORTANCE_IMG = "feature_importance.png"
 SHAP_SUMMARY_IMG = "shap_summary.png"
+ROC_SUMMARY_CSV = "roc_auc_summary.csv"
+ROC_COMPARISON_IMG = "roc_comparison.png"
+
+# Filename slug per model label (used for per-model ROC plots)
+ROC_PLOT_SLUGS = {
+    "Baseline LightGBM": "lgb_baseline",
+    "Tuned LightGBM": "lgb_tuned",
+    "Baseline XGBoost": "xgb_baseline",
+    "Tuned XGBoost": "xgb_tuned",
+}
 
 
 def load_dataset():
@@ -350,6 +362,135 @@ def save_shap_summary_plot(model, X_test, feature_names, output_path):
         plt.close('all')  # Clean up any partial plots
 
 
+def get_class_order(model, label_encoder=None):
+    """Return the list of class labels in the order corresponding to predict_proba columns."""
+    if not hasattr(model, "classes_"):
+        return None
+    classes = model.classes_
+    if label_encoder is not None:
+        classes = label_encoder.inverse_transform(classes)
+    return list(classes)
+
+
+def compute_one_vs_rest_roc(model, X_test, y_test, label_encoder=None):
+    """Compute one-vs-rest ROC curves and AUCs for every class the model knows.
+
+    Returns dict mapping class label -> {"fpr": ..., "tpr": ..., "auc": ..., "support": int}.
+    Returns None if the model lacks predict_proba.
+    """
+    if not hasattr(model, "predict_proba"):
+        return None
+
+    proba = model.predict_proba(X_test)
+    class_order = get_class_order(model, label_encoder=label_encoder)
+    if class_order is None or proba.shape[1] != len(class_order):
+        return None
+
+    y_arr = np.asarray(y_test)
+    results = {}
+    for col_idx, cls in enumerate(class_order):
+        y_binary = (y_arr == cls).astype(int)
+        support = int(y_binary.sum())
+        if support == 0 or support == len(y_binary):
+            # ROC undefined when one of the two binary classes is empty
+            continue
+        fpr, tpr, _ = roc_curve(y_binary, proba[:, col_idx])
+        results[str(cls)] = {
+            "fpr": fpr,
+            "tpr": tpr,
+            "auc": float(auc(fpr, tpr)),
+            "support": support,
+        }
+    return results
+
+
+def save_per_model_roc_plot(roc_data, output_path, title):
+    """Plot one-vs-rest ROC curves (all classes) for a single model on one figure."""
+    if not roc_data:
+        return
+    fig, ax = plt.subplots(figsize=(7, 6))
+    for cls in sorted(roc_data.keys()):
+        d = roc_data[cls]
+        ax.plot(d["fpr"], d["tpr"], lw=2, label=f"{cls} (AUC = {d['auc']:.3f}, n = {d['support']})")
+    ax.plot([0, 1], [0, 1], "k--", lw=1, alpha=0.5, label="Random (AUC = 0.500)")
+    ax.set_xlim(-0.01, 1.01)
+    ax.set_ylim(-0.01, 1.05)
+    ax.set_xlabel("False Positive Rate (1 - Specificity)")
+    ax.set_ylabel("True Positive Rate (Sensitivity)")
+    ax.set_title(title)
+    ax.legend(loc="lower right", fontsize=9)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"ROC plot saved to {output_path}")
+
+
+def save_roc_comparison_plot(roc_lgb, roc_xgb, output_path, label_lgb, label_xgb):
+    """Compare two models' ROC curves side-by-side, one subplot per class."""
+    if not roc_lgb or not roc_xgb:
+        print("Skipping ROC comparison plot (missing data for one or both models).")
+        return
+
+    classes = sorted(set(roc_lgb.keys()) & set(roc_xgb.keys()))
+    if not classes:
+        print("Skipping ROC comparison plot (no overlapping classes).")
+        return
+
+    n = len(classes)
+    cols = 2
+    rows = (n + 1) // 2
+    fig, axes = plt.subplots(rows, cols, figsize=(11, 5 * rows), squeeze=False)
+    for i, cls in enumerate(classes):
+        ax = axes[i // cols][i % cols]
+        d_lgb = roc_lgb[cls]
+        d_xgb = roc_xgb[cls]
+        ax.plot(d_lgb["fpr"], d_lgb["tpr"], lw=2,
+                label=f"{label_lgb} (AUC = {d_lgb['auc']:.3f})", color="#1f77b4")
+        ax.plot(d_xgb["fpr"], d_xgb["tpr"], lw=2,
+                label=f"{label_xgb} (AUC = {d_xgb['auc']:.3f})", color="#d62728")
+        ax.plot([0, 1], [0, 1], "k--", lw=1, alpha=0.5)
+        ax.set_xlim(-0.01, 1.01)
+        ax.set_ylim(-0.01, 1.05)
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        ax.set_title(f"Class: {cls} (n = {d_lgb['support']})")
+        ax.legend(loc="lower right", fontsize=9)
+        ax.grid(True, alpha=0.3)
+
+    # Hide any unused subplot
+    for j in range(n, rows * cols):
+        axes[j // cols][j % cols].axis("off")
+
+    plt.suptitle(f"ROC Comparison: {label_lgb} vs. {label_xgb} (one-vs-rest)", y=1.0)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"ROC comparison plot saved to {output_path}")
+
+
+def build_roc_summary_rows(label, roc_data, total_support):
+    """Build per-class + macro/weighted summary rows for a single model."""
+    if not roc_data:
+        return []
+    rows = []
+    for cls in sorted(roc_data.keys()):
+        d = roc_data[cls]
+        rows.append({
+            "model": label,
+            "class": cls,
+            "auc": round(d["auc"], 4),
+            "support": d["support"],
+        })
+    aucs = np.array([d["auc"] for d in roc_data.values()])
+    supports = np.array([d["support"] for d in roc_data.values()])
+    macro = float(aucs.mean())
+    weighted = float(np.average(aucs, weights=supports)) if supports.sum() > 0 else float("nan")
+    rows.append({"model": label, "class": "MACRO", "auc": round(macro, 4), "support": total_support})
+    rows.append({"model": label, "class": "WEIGHTED", "auc": round(weighted, 4), "support": total_support})
+    return rows
+
+
 def main():
     X, y = load_dataset()
 
@@ -414,6 +555,52 @@ def main():
 
     shap_path = os.path.join(OUTPUT_DIR, SHAP_SUMMARY_IMG)
     save_shap_summary_plot(primary_result["model"], X_test, feature_names, shap_path)
+
+    # ----- ROC / AUC analysis (one-vs-rest, all models) -----
+    print("\n===== ROC / AUC analysis =====")
+    summary_rows = []
+    roc_by_label = {}
+    total_support = len(y_test)
+    for label, result in evaluation_results.items():
+        roc_data = compute_one_vs_rest_roc(
+            result["model"], X_test, y_test, label_encoder=result.get("encoder")
+        )
+        if not roc_data:
+            print(f"Skipping {label} (no predict_proba or class mismatch).")
+            continue
+        roc_by_label[label] = roc_data
+
+        # Per-model ROC plot
+        slug = ROC_PLOT_SLUGS.get(label, label.lower().replace(" ", "_"))
+        plot_path = os.path.join(OUTPUT_DIR, f"roc_curves_{slug}.png")
+        save_per_model_roc_plot(roc_data, plot_path, f"ROC Curves (one-vs-rest) — {label}")
+
+        # Summary print
+        per_class = {cls: round(d["auc"], 4) for cls, d in roc_data.items()}
+        aucs = np.array([d["auc"] for d in roc_data.values()])
+        supports = np.array([d["support"] for d in roc_data.values()])
+        macro = aucs.mean()
+        weighted = np.average(aucs, weights=supports) if supports.sum() > 0 else float("nan")
+        print(f"{label}: per-class AUC = {per_class} | macro = {macro:.4f} | weighted = {weighted:.4f}")
+
+        summary_rows.extend(build_roc_summary_rows(label, roc_data, total_support))
+
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows)
+        summary_csv = os.path.join(OUTPUT_DIR, ROC_SUMMARY_CSV)
+        summary_df.to_csv(summary_csv, index=False)
+        print(f"ROC AUC summary saved to {summary_csv}")
+
+    # Tuned LightGBM vs Tuned XGBoost head-to-head ROC comparison
+    if "Tuned LightGBM" in roc_by_label and "Tuned XGBoost" in roc_by_label:
+        comparison_path = os.path.join(OUTPUT_DIR, ROC_COMPARISON_IMG)
+        save_roc_comparison_plot(
+            roc_by_label["Tuned LightGBM"],
+            roc_by_label["Tuned XGBoost"],
+            comparison_path,
+            "Tuned LightGBM",
+            "Tuned XGBoost",
+        )
 
 
 if __name__ == "__main__":
