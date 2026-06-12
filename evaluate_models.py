@@ -62,6 +62,7 @@ PAPER_STYLE_DISPLAY = {
 }
 
 CONFUSION_MATRIX_IMG = "confusion_matrix.png"
+CONFUSION_MATRIX_XGB_IMG = "confusion_matrix_xgboost.png"
 FEATURE_IMPORTANCE_CSV = "feature_importances.csv"
 FEATURE_IMPORTANCE_IMG = "feature_importance.png"
 SHAP_SUMMARY_IMG = "shap_summary.png"
@@ -692,6 +693,22 @@ def main():
 
     cm_path = os.path.join(OUTPUT_DIR, CONFUSION_MATRIX_IMG)
     save_confusion_matrix_plot(y_test, primary_result["y_pred"], cm_path, f"Confusion Matrix - {primary_label}")
+
+    # Dedicated confusion matrix for XGBoost (Tuned preferred, else Baseline).
+    xgb_label = next(
+        (lbl for lbl in ("Tuned XGBoost", "Baseline XGBoost") if lbl in evaluation_results),
+        None,
+    )
+    if xgb_label is not None:
+        cm_xgb_path = os.path.join(OUTPUT_DIR, CONFUSION_MATRIX_XGB_IMG)
+        save_confusion_matrix_plot(
+            y_test,
+            evaluation_results[xgb_label]["y_pred"],
+            cm_xgb_path,
+            f"Confusion Matrix - {xgb_label}",
+        )
+    else:
+        print("Skipping XGBoost confusion matrix (no XGBoost model evaluated).")
 
     fi_csv_path = os.path.join(OUTPUT_DIR, FEATURE_IMPORTANCE_CSV)
     fi_img_path = os.path.join(OUTPUT_DIR, FEATURE_IMPORTANCE_IMG)

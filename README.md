@@ -288,32 +288,37 @@ python3 validate_model.py
 
 Visual representation of the model's classification performance across all four risk categories.
 
-### 2. Feature Importance
+### 2. Confusion Matrix (XGBoost)
+![Confusion Matrix XGBoost](model_outputs/confusion_matrix_xgboost.png)
+
+Confusion matrix for the Tuned XGBoost model, showing its per-class classification performance for direct comparison against the primary model above.
+
+### 3. Feature Importance
 ![Feature Importance](model_outputs/feature_importance.png)
 
 Bar chart showing the relative contribution of each feature to the model's predictions.
 
-### 3. SHAP Summary Plot
+### 4. SHAP Summary Plot
 ![SHAP Analysis](model_outputs/shap_summary.png)
 
 SHAP (SHapley Additive exPlanations) values illustrating how each feature impacts individual predictions, with color indicating feature values and horizontal position showing positive or negative influence on HIGH-risk classification.
 
-### 4. ROC Curves (Tuned LightGBM)
+### 5. ROC Curves (Tuned LightGBM)
 ![ROC Tuned LightGBM](model_outputs/roc_curves_lgb_tuned.png)
 
 One-vs-rest ROC curves for each risk class, with per-class AUC. Curves close to the top-left corner indicate strong discrimination; the diagonal represents a random classifier (AUC = 0.5).
 
-### 5. ROC Comparison: LightGBM vs. XGBoost
+### 6. ROC Comparison: LightGBM vs. XGBoost
 ![ROC Comparison](model_outputs/roc_comparison.png)
 
 Side-by-side ROC curves for the two tuned gradient-boosting models, one subplot per risk class. This visualization makes the threshold-independent ranking quality of each model directly comparable per class.
 
-### 6. Multi-Model Performance Bar Chart
+### 7. Multi-Model Performance Bar Chart
 ![Performance Bars](model_outputs/model_performance_bars.png)
 
 Grouped bar chart comparing Logistic Regression, LightGBM, and XGBoost across accuracy, precision, recall, and F1-score (macro-averaged). Format mirrors the reference comparison figure in Bahammam (2025).
 
-### 7. ROC Curves Across All Models
+### 8. ROC Curves Across All Models
 ![ROC All Models](model_outputs/roc_curves_all_models.png)
 
 Per-model ROC panel: each subplot shows one model with its four one-vs-rest ROC curves (one per risk class) and the per-class AUC. Format mirrors the reference paper's 4-panel ROC layout.
@@ -355,6 +360,7 @@ drushika/
     ├── xgb_label_encoder.joblib    # Label encoder for XGBoost predictions
     ├── preprocessor.joblib         # Data preprocessing pipeline
     ├── confusion_matrix.png        # Classification confusion matrix
+    ├── confusion_matrix_xgboost.png # Confusion matrix (tuned XGBoost)
     ├── feature_importance.png      # Feature importance visualization
     ├── feature_importances.csv     # Feature importance rankings
     ├── shap_summary.png            # SHAP interpretability plot
